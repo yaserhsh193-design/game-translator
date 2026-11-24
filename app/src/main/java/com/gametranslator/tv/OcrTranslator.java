@@ -30,7 +30,7 @@ final class OcrTranslator {
         boolean same = false;
     }
 
-    private final TextRecognizer recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
+    private TextRecognizer recognizer;
 
     /** Reads the text in a photo. Lines inside one block are joined so sentences translate as a whole. */
     synchronized String readText(byte[] image) throws Exception {
@@ -47,6 +47,7 @@ final class OcrTranslator {
         Bitmap bmp = BitmapFactory.decodeByteArray(image, 0, image.length, opts);
         if (bmp == null) throw new Exception("ما قدرت أقرا الصورة");
 
+        if (recognizer == null) recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
         Text text;
         try {
             text = Tasks.await(recognizer.process(InputImage.fromBitmap(bmp, 0)), 40, TimeUnit.SECONDS);
@@ -64,9 +65,9 @@ final class OcrTranslator {
         return sb.toString();
     }
 
-    void close() {
+    synchronized void close() {
         try {
-            recognizer.close();
+            if (recognizer != null) recognizer.close();
         } catch (Exception ignored) {
         }
     }

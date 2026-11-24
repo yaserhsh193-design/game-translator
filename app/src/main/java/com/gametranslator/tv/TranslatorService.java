@@ -212,14 +212,19 @@ public class TranslatorService extends Service {
         return r;
     }
 
-    /** Live frame: only calls Google when the on-screen text actually changed. */
-    synchronized OcrTranslator.Result translateLive(byte[] image) throws Exception {
+    /** Live frame sent as a photo: read it here, then translate. */
+    OcrTranslator.Result translateLive(byte[] image) throws Exception {
         if (translator == null) throw new Exception("قارئ النص ما اشتغل على هذا التلفزيون");
+        return translateText(translator.readText(image), true);
+    }
+
+    /** Text already read by the phone. In live mode Google is only called when the text actually changed. */
+    synchronized OcrTranslator.Result translateText(String text, boolean live) throws Exception {
         OcrTranslator.Result r = new OcrTranslator.Result();
-        r.original = translator.readText(image);
+        r.original = text == null ? "" : text.trim();
         if (r.original.isEmpty()) return r;
         String key = OcrTranslator.normalize(r.original);
-        if (!autoTranslation.isEmpty() && OcrTranslator.similar(key, autoKey)) {
+        if (live && !autoTranslation.isEmpty() && OcrTranslator.similar(key, autoKey)) {
             r.translated = autoTranslation;
             r.same = true;
             return r;

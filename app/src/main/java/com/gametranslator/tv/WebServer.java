@@ -151,6 +151,28 @@ final class WebServer {
             j.put("same", r.same);
             j.put("overlay", svc.canDraw());
             sendJson(out, 200, j);
+        } else if ("POST".equals(method) && "/text".equals(path)) {
+            JSONObject j = new JSONObject();
+            String text = length > 0 && length < 65536 ? new String(readFully(in, length), StandardCharsets.UTF_8) : "";
+            OcrTranslator.Result r;
+            try {
+                r = svc.translateText(text, "1".equals(param(query, "live")));
+            } catch (Throwable t) {
+                svc.lastError = "text: " + TranslatorService.stack(t);
+                j.put("ok", false);
+                j.put("error", t.getMessage() == null ? t.toString() : t.getMessage());
+                sendJson(out, 500, j);
+                return;
+            }
+            if ("1".equals(param(query, "tv")) && !r.translated.isEmpty()) {
+                svc.showOverlay(r.translated, size(query), !"bottom".equals(param(query, "pos")));
+            }
+            j.put("ok", true);
+            j.put("original", r.original);
+            j.put("translated", r.translated);
+            j.put("same", r.same);
+            j.put("overlay", svc.canDraw());
+            sendJson(out, 200, j);
         } else if ("POST".equals(method) && "/show".equals(path)) {
             if (length > 0 && length < 65536) {
                 String text = new String(readFully(in, length), StandardCharsets.UTF_8);
