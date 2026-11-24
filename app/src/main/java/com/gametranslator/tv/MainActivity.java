@@ -52,7 +52,7 @@ public class MainActivity extends Activity {
         testBtn.setOnClickListener(v -> {
             TranslatorService s = TranslatorService.instance;
             if (s != null) {
-                s.showOverlay("تجربة: هنا بتظهر ترجمة اللعبة فوق الشاشة", 26);
+                s.showOverlay("تجربة: هنا بتظهر ترجمة اللعبة فوق الشاشة", 26, true);
             }
         });
         findViewById(R.id.btn_stop).setOnClickListener(v -> {
@@ -97,7 +97,8 @@ public class MainActivity extends Activity {
             qr.setImageBitmap(null);
             shownUrl = null;
         } else {
-            String url = "http://" + ip + ":" + TranslatorService.port;
+            int https = TranslatorService.httpsPort;
+            String url = https > 0 ? "https://" + ip + ":" + https : "http://" + ip + ":" + TranslatorService.port;
             urlText.setText(url);
             if (!url.equals(shownUrl)) {
                 Bitmap b = makeQr(url);

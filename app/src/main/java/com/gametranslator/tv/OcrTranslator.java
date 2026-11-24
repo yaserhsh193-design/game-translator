@@ -19,6 +19,7 @@ import java.net.URL;
 import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 final class OcrTranslator {
@@ -26,26 +27,29 @@ final class OcrTranslator {
     static final class Result {
         String original = "";
         String translated = "";
+        boolean same = false;
     }
 
     private final TextRecognizer recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
 
-    synchronized Result process(byte[] image) throws Exception {
+    /** Reads the text in a photo. Lines inside one block are joined so sentences translate as a whole. */
+    synchronized String readText(byte[] image) throws Exception {
         BitmapFactory.Options bounds = new BitmapFactory.Options();
         bounds.inJustDecodeBounds = true;
         BitmapFactory.decodeByteArray(image, 0, image.length, bounds);
         int max = Math.max(bounds.outWidth, bounds.outHeight);
         if (max <= 0) throw new Exception("ما قدرت أقرا الصورة");
         int sample = 1;
-        while (max / sample > 3000) sample *= 2;
+        while (max / sample > 2400) sample *= 2;
         BitmapFactory.Options opts = new BitmapFactory.Options();
         opts.inSampleSize = sample;
+        opts.inPreferredConfig = Bitmap.Config.ARGB_8888;
         Bitmap bmp = BitmapFactory.decodeByteArray(image, 0, image.length, opts);
         if (bmp == null) throw new Exception("ما قدرت أقرا الصورة");
 
         Text text;
         try {
-            text = Tasks.await(recognizer.process(InputImage.fromBitmap(bmp, 0)), 30, TimeUnit.SECONDS);
+            text = Tasks.await(recognizer.process(InputImage.fromBitmap(bmp, 0)), 40, TimeUnit.SECONDS);
         } finally {
             bmp.recycle();
         }
@@ -53,17 +57,11 @@ final class OcrTranslator {
         StringBuilder sb = new StringBuilder();
         for (Text.TextBlock block : text.getTextBlocks()) {
             String t = block.getText().replace('\n', ' ').trim();
-            if (letters(t) < 2) continue;
+            if (letters(t) < 3) continue;
             if (sb.length() > 0) sb.append('\n');
             sb.append(t);
         }
-
-        Result r = new Result();
-        r.original = sb.toString();
-        if (!r.original.isEmpty()) {
-            r.translated = translate(r.original);
-        }
-        return r;
+        return sb.toString();
     }
 
     void close() {
@@ -79,6 +77,38 @@ final class OcrTranslator {
             if (Character.isLetter(s.charAt(i))) n++;
         }
         return n;
+    }
+
+    static String normalize(String s) {
+        StringBuilder sb = new StringBuilder();
+        for (char c : s.toLowerCase(Locale.ROOT).toCharArray()) {
+            if (Character.isLetterOrDigit(c)) sb.append(c);
+        }
+        return sb.toString();
+    }
+
+    /** True when two OCR readings are almost the same text (camera noise changes a few letters). */
+    static boolean similar(String a, String b) {
+        if (a.equals(b)) return true;
+        if (a.isEmpty() || b.isEmpty()) return false;
+        if (a.length() > 600) a = a.substring(0, 600);
+        if (b.length() > 600) b = b.substring(0, 600);
+        int longest = Math.max(a.length(), b.length());
+        if (Math.abs(a.length() - b.length()) > longest * 0.2) return false;
+        int[] prev = new int[b.length() + 1];
+        int[] cur = new int[b.length() + 1];
+        for (int j = 0; j <= b.length(); j++) prev[j] = j;
+        for (int i = 1; i <= a.length(); i++) {
+            cur[0] = i;
+            for (int j = 1; j <= b.length(); j++) {
+                int cost = a.charAt(i - 1) == b.charAt(j - 1) ? 0 : 1;
+                cur[j] = Math.min(Math.min(cur[j - 1] + 1, prev[j] + 1), prev[j - 1] + cost);
+            }
+            int[] t = prev;
+            prev = cur;
+            cur = t;
+        }
+        return prev[b.length()] <= longest * 0.15;
     }
 
     /** Free Google Translate endpoint, auto-detect source, Arabic target. Long text is split by line. */

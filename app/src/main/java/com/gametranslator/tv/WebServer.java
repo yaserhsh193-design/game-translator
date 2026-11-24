@@ -15,22 +15,26 @@ import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Tiny HTTP server: serves the phone page and receives screenshots to translate. */
+import javax.net.ssl.SSLServerSocketFactory;
+
+/** Tiny HTTP/HTTPS server: serves the phone page and receives camera frames to translate. */
 final class WebServer {
 
     private static final int MAX_BODY = 25 * 1024 * 1024;
 
     private final TranslatorService svc;
-    private final ExecutorService pool = Executors.newFixedThreadPool(4);
+    private final SSLServerSocketFactory ssl;
+    private final ExecutorService pool = Executors.newFixedThreadPool(6);
     private ServerSocket socket;
     private volatile boolean running;
 
-    WebServer(TranslatorService svc) {
+    WebServer(TranslatorService svc, SSLServerSocketFactory ssl) {
         this.svc = svc;
+        this.ssl = ssl;
     }
 
     void start(int port) throws IOException {
-        ServerSocket ss = new ServerSocket();
+        ServerSocket ss = ssl != null ? ssl.createServerSocket() : new ServerSocket();
         ss.setReuseAddress(true);
         try {
             ss.bind(new InetSocketAddress(port));
@@ -46,11 +50,11 @@ final class WebServer {
                 try {
                     final Socket s = ss.accept();
                     pool.execute(() -> handle(s));
-                } catch (IOException e) {
+                } catch (Throwable e) {
                     if (!running) break;
                 }
             }
-        }, "web-server");
+        }, ssl != null ? "https-server" : "http-server");
         t.setDaemon(true);
         t.start();
     }
@@ -94,64 +98,83 @@ final class WebServer {
                 query = target.substring(q + 1);
             }
 
-            if ("GET".equals(method) && ("/".equals(path) || "/index.html".equals(path))) {
-                send(out, 200, "text/html; charset=utf-8", readAsset("phone.html"));
-            } else if ("GET".equals(method) && "/status".equals(path)) {
+            try {
+                route(method, path, query, length, in, out);
+            } catch (Throwable t) {
+                svc.lastError = path + ": " + TranslatorService.stack(t);
                 JSONObject j = new JSONObject();
-                j.put("ok", true);
-                j.put("overlay", svc.canDraw());
-                sendJson(out, 200, j);
-            } else if ("POST".equals(method) && "/translate".equals(path)) {
-                JSONObject j = new JSONObject();
-                if (length <= 0 || length > MAX_BODY) {
-                    j.put("ok", false);
-                    j.put("error", "حجم الصورة غير مقبول");
-                    sendJson(out, 400, j);
-                    return;
-                }
-                byte[] body = readFully(in, length);
-                try {
-                    OcrTranslator.Result r = svc.translate(body);
-                    boolean showOnTv = param(query, "tv").equals("1");
-                    int size = 26;
-                    try {
-                        size = Math.max(14, Math.min(60, Integer.parseInt(param(query, "size"))));
-                    } catch (NumberFormatException ignored) {
-                    }
-                    if (showOnTv && !r.translated.isEmpty()) svc.showOverlay(r.translated, size);
-                    j.put("ok", true);
-                    j.put("original", r.original);
-                    j.put("translated", r.translated);
-                    j.put("overlay", svc.canDraw());
-                    sendJson(out, 200, j);
-                } catch (Exception e) {
-                    j.put("ok", false);
-                    j.put("error", e.getMessage() == null ? e.toString() : e.getMessage());
-                    sendJson(out, 500, j);
-                }
-            } else if ("POST".equals(method) && "/show".equals(path)) {
-                JSONObject j = new JSONObject();
-                if (length > 0 && length < 65536) {
-                    String text = new String(readFully(in, length), StandardCharsets.UTF_8);
-                    int size = 26;
-                    try {
-                        size = Math.max(14, Math.min(60, Integer.parseInt(param(query, "size"))));
-                    } catch (NumberFormatException ignored) {
-                    }
-                    svc.showOverlay(text, size);
-                }
-                j.put("ok", true);
-                sendJson(out, 200, j);
-            } else if ("POST".equals(method) && "/hide".equals(path)) {
-                if (length > 0 && length < 65536) readFully(in, length);
-                svc.hideOverlay();
-                JSONObject j = new JSONObject();
-                j.put("ok", true);
-                sendJson(out, 200, j);
-            } else {
-                send(out, 404, "text/plain; charset=utf-8", "Not found".getBytes(StandardCharsets.UTF_8));
+                j.put("ok", false);
+                j.put("error", "خطأ في التلفزيون: " + t);
+                sendJson(out, 500, j);
             }
-        } catch (Exception ignored) {
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void route(String method, String path, String query, int length, InputStream in, OutputStream out) throws Exception {
+        if ("GET".equals(method) && ("/".equals(path) || "/index.html".equals(path))) {
+            send(out, 200, "text/html; charset=utf-8", readAsset("phone.html"));
+        } else if ("GET".equals(method) && "/status".equals(path)) {
+            JSONObject j = new JSONObject();
+            j.put("ok", true);
+            j.put("overlay", svc.canDraw());
+            j.put("https", TranslatorService.httpsPort);
+            sendJson(out, 200, j);
+        } else if ("GET".equals(method) && "/debug".equals(path)) {
+            send(out, 200, "text/plain; charset=utf-8", svc.debugInfo().getBytes(StandardCharsets.UTF_8));
+        } else if ("POST".equals(method) && "/translate".equals(path)) {
+            JSONObject j = new JSONObject();
+            if (length <= 0 || length > MAX_BODY) {
+                j.put("ok", false);
+                j.put("error", "حجم الصورة غير مقبول");
+                sendJson(out, 400, j);
+                return;
+            }
+            byte[] body = readFully(in, length);
+            boolean live = "1".equals(param(query, "live"));
+            OcrTranslator.Result r;
+            try {
+                r = live ? svc.translateLive(body) : svc.translateOnce(body);
+            } catch (Throwable t) {
+                svc.lastError = "translate: " + TranslatorService.stack(t);
+                j.put("ok", false);
+                j.put("error", t.getMessage() == null ? t.toString() : t.getMessage());
+                sendJson(out, 500, j);
+                return;
+            }
+            if ("1".equals(param(query, "tv")) && !r.translated.isEmpty()) {
+                svc.showOverlay(r.translated, size(query), !"bottom".equals(param(query, "pos")));
+            }
+            j.put("ok", true);
+            j.put("original", r.original);
+            j.put("translated", r.translated);
+            j.put("same", r.same);
+            j.put("overlay", svc.canDraw());
+            sendJson(out, 200, j);
+        } else if ("POST".equals(method) && "/show".equals(path)) {
+            if (length > 0 && length < 65536) {
+                String text = new String(readFully(in, length), StandardCharsets.UTF_8);
+                svc.showOverlay(text, size(query), !"bottom".equals(param(query, "pos")));
+            }
+            JSONObject j = new JSONObject();
+            j.put("ok", true);
+            sendJson(out, 200, j);
+        } else if ("POST".equals(method) && "/hide".equals(path)) {
+            if (length > 0 && length < 65536) readFully(in, length);
+            svc.hideOverlay();
+            JSONObject j = new JSONObject();
+            j.put("ok", true);
+            sendJson(out, 200, j);
+        } else {
+            send(out, 404, "text/plain; charset=utf-8", "Not found".getBytes(StandardCharsets.UTF_8));
+        }
+    }
+
+    private static int size(String query) {
+        try {
+            return Math.max(14, Math.min(60, Integer.parseInt(param(query, "size"))));
+        } catch (NumberFormatException e) {
+            return 26;
         }
     }
 

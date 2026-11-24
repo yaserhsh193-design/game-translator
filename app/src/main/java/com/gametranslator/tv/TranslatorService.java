@@ -15,43 +15,87 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.provider.Settings;
 import android.text.TextUtils;
+import android.util.Base64;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.TextView;
 
-import java.io.IOException;
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.nio.charset.StandardCharsets;
+import java.security.KeyStore;
+
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLServerSocketFactory;
 
 public class TranslatorService extends Service {
 
     static volatile TranslatorService instance;
     static volatile int port = 8080;
+    static volatile int httpsPort = -1;
 
     private static final String CHANNEL = "translator";
 
-    private WebServer server;
+    private WebServer httpServer;
+    private WebServer httpsServer;
     private OcrTranslator translator;
     private Handler main;
     private WindowManager wm;
     private TextView overlay;
+    private boolean overlayTop = true;
     private final Runnable hideRunnable = this::removeOverlayNow;
+
+    volatile String lastError = "";
+
+    // Live (auto) mode: remember what is on screen so the same text is not re-translated every frame.
+    private String autoKey = "";
+    private String autoTranslation = "";
 
     @Override
     public void onCreate() {
         super.onCreate();
+        installCrashLogger();
         main = new Handler(Looper.getMainLooper());
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
         startAsForeground();
-        translator = new OcrTranslator();
-        for (int p = 8080; p < 8090; p++) {
-            WebServer s = new WebServer(this);
+        try {
+            translator = new OcrTranslator();
+        } catch (Throwable t) {
+            lastError = "OCR init: " + stack(t);
+        }
+
+        for (int p = 8080; p < 8090 && httpServer == null; p++) {
+            WebServer s = new WebServer(this, null);
             try {
                 s.start(p);
-                server = s;
+                httpServer = s;
                 port = p;
-                break;
-            } catch (IOException ignored) {
+            } catch (Exception ignored) {
+            }
+        }
+
+        SSLServerSocketFactory ssl = null;
+        try {
+            ssl = sslFactory();
+        } catch (Throwable t) {
+            lastError = "HTTPS init: " + stack(t);
+        }
+        if (ssl != null) {
+            for (int p = 8443; p < 8453 && httpsServer == null; p++) {
+                WebServer s = new WebServer(this, ssl);
+                try {
+                    s.start(p);
+                    httpsServer = s;
+                    httpsPort = p;
+                } catch (Exception ignored) {
+                }
             }
         }
         instance = this;
@@ -65,7 +109,9 @@ public class TranslatorService extends Service {
     @Override
     public void onDestroy() {
         instance = null;
-        if (server != null) server.stop();
+        if (httpServer != null) httpServer.stop();
+        if (httpsServer != null) httpsServer.stop();
+        httpsPort = -1;
         main.removeCallbacks(hideRunnable);
         removeOverlayNow();
         if (translator != null) translator.close();
@@ -75,6 +121,57 @@ public class TranslatorService extends Service {
     @Override
     public IBinder onBind(Intent intent) {
         return null;
+    }
+
+    private static SSLServerSocketFactory sslFactory() throws Exception {
+        char[] pass = TlsCert.PASSWORD.toCharArray();
+        KeyStore ks = KeyStore.getInstance("PKCS12");
+        ks.load(new ByteArrayInputStream(Base64.decode(TlsCert.P12_BASE64, Base64.DEFAULT)), pass);
+        KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+        kmf.init(ks, pass);
+        SSLContext ctx = SSLContext.getInstance("TLS");
+        ctx.init(kmf.getKeyManagers(), null, null);
+        return ctx.getServerSocketFactory();
+    }
+
+    private void installCrashLogger() {
+        final Thread.UncaughtExceptionHandler prev = Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler((thread, e) -> {
+            try (FileOutputStream out = new FileOutputStream(new File(getFilesDir(), "crash.txt"))) {
+                out.write(("Thread " + thread.getName() + "\n" + stack(e)).getBytes(StandardCharsets.UTF_8));
+            } catch (Exception ignored) {
+            }
+            if (prev != null) prev.uncaughtException(thread, e);
+        });
+    }
+
+    String debugInfo() {
+        StringBuilder sb = new StringBuilder();
+        try {
+            sb.append("version ").append(getPackageManager().getPackageInfo(getPackageName(), 0).versionName).append('\n');
+        } catch (Exception ignored) {
+        }
+        sb.append("sdk ").append(Build.VERSION.SDK_INT).append(", ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL).append('\n');
+        sb.append("abi ").append(Build.SUPPORTED_ABIS.length > 0 ? Build.SUPPORTED_ABIS[0] : "?").append('\n');
+        sb.append("https ").append(httpsPort).append(", overlay ").append(canDraw()).append('\n');
+        if (!lastError.isEmpty()) sb.append("last error:\n").append(lastError).append('\n');
+        File crash = new File(getFilesDir(), "crash.txt");
+        if (crash.exists()) {
+            try (FileInputStream in = new FileInputStream(crash)) {
+                byte[] b = new byte[(int) Math.min(crash.length(), 8000)];
+                int n = in.read(b);
+                sb.append("last crash:\n").append(new String(b, 0, Math.max(n, 0), StandardCharsets.UTF_8));
+            } catch (Exception ignored) {
+            }
+        }
+        return sb.toString();
+    }
+
+    static String stack(Throwable t) {
+        StringWriter w = new StringWriter();
+        t.printStackTrace(new PrintWriter(w));
+        String s = w.toString();
+        return s.length() > 4000 ? s.substring(0, 4000) : s;
     }
 
     private void startAsForeground() {
@@ -90,7 +187,7 @@ public class TranslatorService extends Service {
         PendingIntent pi = PendingIntent.getActivity(this, 0,
                 new Intent(this, MainActivity.class), PendingIntent.FLAG_IMMUTABLE);
         Notification n = b.setContentTitle("مترجم الألعاب شغّال")
-                .setContentText("صوّر الشاشة من الجوال عشان تترجم")
+                .setContentText("وجّه كاميرا الجوال على الشاشة")
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
                 .setContentIntent(pi)
                 .setOngoing(true)
@@ -106,15 +203,39 @@ public class TranslatorService extends Service {
         return Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(this);
     }
 
-    OcrTranslator.Result translate(byte[] image) throws Exception {
-        return translator.process(image);
+    /** One photo: read text, translate, return both. */
+    OcrTranslator.Result translateOnce(byte[] image) throws Exception {
+        if (translator == null) throw new Exception("قارئ النص ما اشتغل على هذا التلفزيون");
+        OcrTranslator.Result r = new OcrTranslator.Result();
+        r.original = translator.readText(image);
+        if (!r.original.isEmpty()) r.translated = OcrTranslator.translate(r.original);
+        return r;
+    }
+
+    /** Live frame: only calls Google when the on-screen text actually changed. */
+    synchronized OcrTranslator.Result translateLive(byte[] image) throws Exception {
+        if (translator == null) throw new Exception("قارئ النص ما اشتغل على هذا التلفزيون");
+        OcrTranslator.Result r = new OcrTranslator.Result();
+        r.original = translator.readText(image);
+        if (r.original.isEmpty()) return r;
+        String key = OcrTranslator.normalize(r.original);
+        if (!autoTranslation.isEmpty() && OcrTranslator.similar(key, autoKey)) {
+            r.translated = autoTranslation;
+            r.same = true;
+            return r;
+        }
+        r.translated = OcrTranslator.translate(r.original);
+        autoKey = key;
+        autoTranslation = r.translated;
+        return r;
     }
 
     /** Shows Arabic text over whatever is on the TV. Safe to call from any thread. */
-    void showOverlay(final String text, final int sizeSp) {
+    void showOverlay(final String text, final int sizeSp, final boolean top) {
         main.post(() -> {
             if (!canDraw() || TextUtils.isEmpty(text)) return;
             try {
+                if (overlay != null && overlayTop != top) removeOverlayNow();
                 if (overlay == null) {
                     TextView tv = new TextView(this);
                     tv.setTextColor(Color.WHITE);
@@ -122,10 +243,10 @@ public class TranslatorService extends Service {
                     tv.setGravity(Gravity.CENTER);
                     tv.setTextDirection(View.TEXT_DIRECTION_RTL);
                     tv.setLineSpacing(0f, 1.2f);
-                    tv.setMaxLines(9);
+                    tv.setMaxLines(8);
                     tv.setEllipsize(TextUtils.TruncateAt.END);
                     int padH = dp(48);
-                    int padV = dp(18);
+                    int padV = dp(14);
                     tv.setPadding(padH, padV, padH, padV);
 
                     int type = Build.VERSION.SDK_INT >= 26
@@ -139,17 +260,19 @@ public class TranslatorService extends Service {
                                     | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
                                     | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                             PixelFormat.TRANSLUCENT);
-                    lp.gravity = Gravity.BOTTOM;
-                    lp.y = dp(24);
+                    lp.gravity = top ? Gravity.TOP : Gravity.BOTTOM;
+                    lp.y = dp(20);
                     wm.addView(tv, lp);
                     overlay = tv;
+                    overlayTop = top;
                 }
                 overlay.setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp);
-                overlay.setText(text);
+                if (!text.contentEquals(overlay.getText())) overlay.setText(text);
                 main.removeCallbacks(hideRunnable);
                 long ms = Math.min(45000, 8000 + text.length() * 90L);
                 main.postDelayed(hideRunnable, ms);
-            } catch (Exception ignored) {
+            } catch (Throwable t) {
+                lastError = "overlay: " + stack(t);
                 overlay = null;
             }
         });
