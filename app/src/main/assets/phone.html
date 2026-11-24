@@ -8,74 +8,88 @@
 <meta name="theme-color" content="#101418">
 <title>مترجم الألعاب</title>
 <style>
-:root{--bg:#101418;--card:#1a2027;--ink:#f2f4f7;--muted:#9aa4b2;--accent:#ffb020;--bad:#ff6b6b}
+:root{--bg:#101418;--card:#1a2027;--line:#2f3843;--ink:#f2f4f7;--muted:#9aa4b2;--accent:#ffb020;--bad:#ff6b6b;--good:#4cd38a}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 -apple-system,"SF Arabic","Geeza Pro",system-ui,sans-serif;
-  padding:calc(env(safe-area-inset-top) + 18px) 18px calc(env(safe-area-inset-bottom) + 24px)}
-h1{font-size:28px;margin:0 0 2px}
-#conn{margin:0 0 18px;color:var(--muted);font-size:15px}
+  padding:calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 24px)}
+h1{font-size:26px;margin:0}
+#conn{margin:0 0 14px;color:var(--muted);font-size:14px}
 #conn.bad{color:var(--bad)}
+.card{background:var(--card);border-radius:16px;padding:14px 16px;margin-top:14px}
+.btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:64px;border:0;border-radius:18px;
+  background:var(--accent);color:#1b1300;font-family:inherit;font-weight:700;font-size:20px;line-height:1.2;cursor:pointer;text-decoration:none;-webkit-tap-highlight-color:transparent}
+.btn.stop{background:#3a2326;color:#ffd6d6}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink);font-weight:500;font-size:16px;min-height:50px}
 .file{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
-.big{display:flex;align-items:center;justify-content:center;gap:10px;min-height:96px;border-radius:20px;background:var(--accent);
-  color:#1b1300;font-size:22px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent}
-.big:active{transform:scale(.98)}
-.big svg{width:30px;height:30px}
-.small{display:flex;align-items:center;justify-content:center;min-height:52px;margin-top:10px;border-radius:14px;
-  border:1px solid #2f3843;color:var(--ink);font-size:16px;cursor:pointer}
-.opts{margin-top:16px;background:var(--card);border-radius:16px;padding:6px 16px}
-.row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:52px}
+.vid{position:relative;border-radius:14px;overflow:hidden;background:#000;aspect-ratio:16/9;margin-bottom:12px}
+.vid video{width:100%;height:100%;object-fit:cover;display:block}
+.vid .zone{position:absolute;left:0;right:0;border:2px dashed var(--accent);pointer-events:none}
+#live-state{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:15px;margin-top:10px;min-height:24px}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--muted);flex:none}
+.dot.on{background:var(--good);animation:p 1.2s ease-in-out infinite}
+@keyframes p{50%{opacity:.35}}
+#ar{font-size:21px;line-height:1.7;white-space:pre-wrap}
+#ar:empty::before{content:"الترجمة بتطلع هنا";color:var(--muted);font-size:16px}
+details{margin-top:8px;color:var(--muted)}
+summary{cursor:pointer;min-height:34px}
+#en{white-space:pre-wrap;font-size:14px;text-align:left}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:50px}
 .row+.row{border-top:1px solid #262e37}
+.row>span{flex:1}
 input[type=checkbox]{width:24px;height:24px;accent-color:var(--accent)}
-.seg{display:flex;gap:6px}
-.seg button{min-width:48px;min-height:40px;border-radius:10px;border:1px solid #2f3843;background:transparent;color:var(--ink);font-size:15px}
+.seg{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.seg button{min-width:52px;min-height:38px;padding:0 10px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--ink);font-family:inherit;font-size:15px}
 .seg button.on{background:var(--accent);color:#1b1300;border-color:var(--accent);font-weight:700}
-#out{margin-top:18px;background:var(--card);border-radius:16px;padding:16px}
-#msg{color:var(--muted);font-size:15px}
+#msg{font-size:15px;color:var(--muted)}
 #msg.bad{color:var(--bad)}
-#ar{font-size:21px;line-height:1.7;white-space:pre-wrap;margin-top:6px}
-details{margin-top:12px;color:var(--muted)}
-summary{cursor:pointer;min-height:36px}
-#en{white-space:pre-wrap;font-size:15px;text-align:left}
-.actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
-.actions button{flex:1;min-height:46px;border-radius:12px;border:1px solid #2f3843;background:transparent;color:var(--ink);font-size:15px}
-#hist h2{font-size:16px;color:var(--muted);margin:26px 0 8px}
-.h{background:var(--card);border-radius:12px;padding:12px 14px;margin-bottom:8px;white-space:pre-wrap;font-size:16px}
-.spin{display:inline-block;width:16px;height:16px;border:2px solid var(--muted);border-top-color:transparent;border-radius:50%;
-  animation:r .8s linear infinite;vertical-align:-3px;margin-left:6px}
-@keyframes r{to{transform:rotate(360deg)}}
-@media (prefers-reduced-motion:reduce){.spin{animation:none}}
+#dbg{direction:ltr;text-align:left;font-size:11px;color:var(--muted);white-space:pre-wrap;max-height:220px;overflow:auto;margin:8px 0 0}
+.note{font-size:15px;color:var(--muted)}
+.note b{color:var(--ink)}
+.two{display:flex;gap:8px;margin-top:10px}
+.two>*{flex:1}
+@media (prefers-reduced-motion:reduce){.dot.on{animation:none}}
 </style>
 </head>
 <body>
 <h1>مترجم الألعاب</h1>
 <p id="conn">يتصل بالتلفزيون…</p>
 
-<label class="big" for="cam">
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.5"/></svg>
-  صوّر شاشة اللعبة
-</label>
-<input class="file" id="cam" type="file" accept="image/*" capture="environment">
-<label class="small" for="pick">أو اختر صورة من الألبوم</label>
-<input class="file" id="pick" type="file" accept="image/*">
+<!-- Shown when the page is on plain http: Safari only allows the live camera on https -->
+<section class="card" id="need-https" hidden>
+  <p class="note" style="margin-top:0">الترجمة التلقائية بالكاميرا تحتاج الاتصال الآمن. اضغط الزر تحت، وإذا طلع لك <b>"هذا الاتصال غير خاص"</b> اضغط <b>إظهار التفاصيل</b> ثم <b>زيارة هذا الموقع</b>. تسويها مرة وحدة بس.</p>
+  <a class="btn" id="go-https" href="#">افتح الترجمة التلقائية</a>
+</section>
 
-<div class="opts">
-  <label class="row" for="tv"><span>اعرض الترجمة على التلفزيون</span><input type="checkbox" id="tv" checked></label>
-  <div class="row"><span>حجم خط التلفزيون</span>
-    <div class="seg" id="seg"><button data-s="20">صغير</button><button data-s="26">وسط</button><button data-s="34">كبير</button></div>
-  </div>
-</div>
+<section class="card" id="live">
+  <div class="vid" id="vidbox" hidden><video id="video" playsinline muted autoplay></video><div class="zone" id="zone"></div></div>
+  <button class="btn" id="start">ابدأ الترجمة التلقائية</button>
+  <div id="live-state"><span class="dot" id="dot"></span><span id="state">ثبّت الجوال موجّه على شاشة التلفزيون واضغط ابدأ</span></div>
+</section>
 
-<section id="out" hidden>
+<section class="card">
   <div id="msg"></div>
   <div id="ar"></div>
   <details id="det" hidden><summary>النص الأصلي</summary><div id="en" dir="ltr"></div></details>
-  <div class="actions" id="acts" hidden>
-    <button id="again">اعرضها مرة ثانية على التلفزيون</button>
-    <button id="hide">إخفاء من التلفزيون</button>
+  <pre id="dbg" hidden></pre>
+  <div class="two">
+    <button class="btn ghost" id="hide">إخفاء من التلفزيون</button>
+    <label class="btn ghost" for="cam">صورة وحدة</label>
   </div>
+  <input class="file" id="cam" type="file" accept="image/*" capture="environment">
 </section>
 
-<section id="hist"></section>
+<section class="card">
+  <label class="row" for="tv"><span>اعرض الترجمة على التلفزيون</span><input type="checkbox" id="tv" checked></label>
+  <div class="row"><span>مكان الترجمة في التلفزيون</span>
+    <div class="seg" data-k="pos"><button data-v="top">فوق</button><button data-v="bottom">تحت</button></div></div>
+  <div class="row"><span>حجم الخط</span>
+    <div class="seg" data-k="size"><button data-v="20">صغير</button><button data-v="26">وسط</button><button data-v="34">كبير</button></div></div>
+  <div class="row"><span>وين كلام اللعبة؟</span>
+    <div class="seg" data-k="area"><button data-v="all">كل الشاشة</button><button data-v="bottom">تحت</button><button data-v="top">فوق</button></div></div>
+  <div class="row"><span>كل كم ثانية يقرأ</span>
+    <div class="seg" data-k="every"><button data-v="2">٢</button><button data-v="3">٣</button><button data-v="5">٥</button></div></div>
+</section>
 
 <script>
 {
@@ -84,126 +98,185 @@ summary{cursor:pointer;min-height:36px}
     get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
   };
-  let size = store.get('size', '26');
-  let last = null;
-  let overlayOk = true;
-  const history = [];
+  const opt = { pos: store.get('pos', 'top'), size: store.get('size', '26'), area: store.get('area', 'all'), every: store.get('every', '3') };
+  let overlayOk = true, running = false, stream = null, wakeLock = null, httpsPort = -1;
 
   $('tv').checked = store.get('tv', '1') === '1';
   $('tv').addEventListener('change', () => store.set('tv', $('tv').checked ? '1' : '0'));
 
-  function paintSeg() {
-    for (const b of $('seg').querySelectorAll('button')) b.classList.toggle('on', b.dataset.s === size);
+  function paint() {
+    for (const seg of document.querySelectorAll('.seg')) {
+      for (const b of seg.querySelectorAll('button')) b.classList.toggle('on', b.dataset.v === opt[seg.dataset.k]);
+    }
+    const z = $('zone');
+    z.hidden = opt.area === 'all';
+    z.style.top = opt.area === 'bottom' ? '50%' : '0';
+    z.style.bottom = opt.area === 'top' ? '50%' : '0';
   }
-  $('seg').addEventListener('click', e => {
-    const b = e.target.closest('button');
-    if (!b) return;
-    size = b.dataset.s; store.set('size', size); paintSeg();
-  });
-  paintSeg();
+  for (const seg of document.querySelectorAll('.seg')) {
+    seg.addEventListener('click', e => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      opt[seg.dataset.k] = b.dataset.v; store.set(seg.dataset.k, b.dataset.v); paint();
+    });
+  }
+  paint();
 
-  function setMsg(text, bad, busy) {
-    $('out').hidden = false;
-    $('msg').className = bad ? 'bad' : '';
-    $('msg').textContent = text;
-    if (busy) { const s = document.createElement('span'); s.className = 'spin'; $('msg').prepend(s); }
+  const liveCapable = window.isSecureContext && navigator.mediaDevices && navigator.mediaDevices.getUserMedia;
+
+  function setMsg(text, bad) { $('msg').className = bad ? 'bad' : ''; $('msg').textContent = text; }
+  function setState(text, on) { $('state').textContent = text; $('dot').classList.toggle('on', !!on); }
+
+  async function showDebug() {
+    try {
+      const t = await (await fetch('/debug', { cache: 'no-store' })).text();
+      $('dbg').textContent = t; $('dbg').hidden = false;
+    } catch (e) {
+      $('dbg').textContent = 'التلفزيون ما يرد. تأكد إن تطبيق المترجم مفتوح وإنكم على نفس الواي فاي.'; $('dbg').hidden = false;
+    }
   }
 
   async function checkConn() {
     try {
-      const r = await fetch('/status', { cache: 'no-store' });
-      const j = await r.json();
-      overlayOk = !!j.overlay;
+      const j = await (await fetch('/status', { cache: 'no-store' })).json();
+      overlayOk = !!j.overlay; httpsPort = j.https;
       $('conn').className = '';
-      $('conn').textContent = overlayOk ? 'متصل بالتلفزيون' : 'متصل بالتلفزيون، بس التلفزيون ما عنده إذن الظهور فوق الشاشة. الترجمة بتطلع هنا.';
+      $('conn').textContent = overlayOk ? 'متصل بالتلفزيون' : 'متصل، بس التلفزيون ما عنده إذن الظهور فوق الشاشة، فالترجمة بتطلع هنا بس.';
+      if (!liveCapable && httpsPort > 0) {
+        $('need-https').hidden = false;
+        $('go-https').href = 'https://' + location.hostname + ':' + httpsPort + '/';
+      }
     } catch (e) {
       $('conn').className = 'bad';
-      $('conn').textContent = 'انقطع الاتصال بالتلفزيون. تأكد إن تطبيق المترجم شغّال وإنكم على نفس الواي فاي.';
+      $('conn').textContent = 'التلفزيون ما يرد. تأكد إن تطبيق المترجم مفتوح وإنكم على نفس الواي فاي.';
     }
   }
   checkConn();
   setInterval(checkConn, 15000);
+  if (!liveCapable) { $('live').hidden = true; }
 
-  function toJpeg(file) {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      const url = URL.createObjectURL(file);
-      img.onload = () => {
-        const max = 2000;
-        const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
-        const w = Math.round(img.naturalWidth * k), h = Math.round(img.naturalHeight * k);
-        const c = document.createElement('canvas');
-        c.width = w; c.height = h;
-        c.getContext('2d').drawImage(img, 0, 0, w, h);
-        URL.revokeObjectURL(url);
-        c.toBlob(b => b ? resolve(b) : reject(new Error('ما قدرت أجهّز الصورة')), 'image/jpeg', 0.9);
-      };
-      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('ما قدرت أفتح الصورة')); };
+  function showResult(j) {
+    $('ar').textContent = j.translated || '';
+    $('en').textContent = j.original || '';
+    $('det').hidden = !j.original;
+  }
+
+  async function send(blob, live) {
+    const q = 'tv=' + ($('tv').checked ? 1 : 0) + '&size=' + opt.size + '&pos=' + opt.pos + (live ? '&live=1' : '');
+    const r = await fetch('/translate?' + q, { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob });
+    let j;
+    try { j = await r.json(); } catch (e) { throw new Error('رد غريب من التلفزيون (' + r.status + ')'); }
+    if (!j.ok) throw new Error(j.error || 'صار خطأ');
+    overlayOk = !!j.overlay;
+    return j;
+  }
+
+  function cropToBlob(source, sw, sh) {
+    let sy = 0, h = sh;
+    if (opt.area === 'bottom') { sy = Math.round(sh / 2); h = sh - sy; }
+    if (opt.area === 'top') { h = Math.round(sh / 2); }
+    const k = Math.min(1, 1600 / sw);
+    const c = document.createElement('canvas');
+    c.width = Math.round(sw * k); c.height = Math.round(h * k);
+    c.getContext('2d').drawImage(source, 0, sy, sw, h, 0, 0, c.width, c.height);
+    return new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(new Error('ما قدرت أجهّز الصورة')), 'image/jpeg', 0.85));
+  }
+
+  /* ---------- live camera mode ---------- */
+  async function keepAwake() {
+    try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
+  }
+  document.addEventListener('visibilitychange', () => { if (running && document.visibilityState === 'visible') keepAwake(); });
+
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  async function loop() {
+    let lastShown = '';
+    while (running) {
+      const t0 = Date.now();
+      const v = $('video');
+      if (v.videoWidth > 0) {
+        try {
+          setState('يقرأ الشاشة…', true);
+          const j = await send(await cropToBlob(v, v.videoWidth, v.videoHeight), true);
+          $('dbg').hidden = true;
+          if (!j.original) setState('ما فيه كلام على الشاشة الحين', true);
+          else {
+            if (j.translated !== lastShown) { showResult(j); lastShown = j.translated; }
+            setState(j.same ? 'نفس الكلام، الترجمة ظاهرة' : 'ترجمة جديدة ✓', true);
+          }
+          setMsg('');
+        } catch (e) {
+          setState('صار خطأ، بيحاول مرة ثانية…', true);
+          setMsg((e && e.message) || 'صار خطأ', true);
+          await showDebug();
+        }
+      }
+      await sleep(Math.max(300, Number(opt.every) * 1000 - (Date.now() - t0)));
+    }
+  }
+
+  async function start() {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+      });
+    } catch (e) {
+      setMsg('ما قدرت أشغّل الكاميرا. اسمح لسفاري يستخدم الكاميرا وجرّب مرة ثانية. (' + (e.name || e) + ')', true);
+      return;
+    }
+    const v = $('video');
+    v.srcObject = stream;
+    try { await v.play(); } catch (e) {}
+    $('vidbox').hidden = false;
+    running = true;
+    $('start').textContent = 'إيقاف الترجمة التلقائية';
+    $('start').classList.add('stop');
+    keepAwake();
+    loop();
+  }
+
+  function stop() {
+    running = false;
+    if (stream) for (const t of stream.getTracks()) t.stop();
+    stream = null;
+    $('vidbox').hidden = true;
+    $('start').textContent = 'ابدأ الترجمة التلقائية';
+    $('start').classList.remove('stop');
+    setState('متوقف', false);
+    try { if (wakeLock) wakeLock.release(); } catch (e) {}
+  }
+
+  $('start').addEventListener('click', () => running ? stop() : start());
+
+  /* ---------- single photo ---------- */
+  function loadImage(file) {
+    return new Promise((res, rej) => {
+      const img = new Image(), url = URL.createObjectURL(file);
+      img.onload = () => { URL.revokeObjectURL(url); res(img); };
+      img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('ما قدرت أفتح الصورة')); };
       img.src = url;
     });
   }
-
-  function showResult(j) {
-    $('ar').textContent = j.translated;
-    $('en').textContent = j.original;
-    $('det').hidden = !j.original;
-    $('acts').hidden = !j.translated || !overlayOk;
-  }
-
-  function renderHistory() {
-    const box = $('hist');
-    box.textContent = '';
-    if (history.length < 2) return;
-    const h = document.createElement('h2');
-    h.textContent = 'الترجمات السابقة';
-    box.appendChild(h);
-    for (const item of history.slice(1)) {
-      const d = document.createElement('div');
-      d.className = 'h';
-      d.textContent = item.translated;
-      box.appendChild(d);
-    }
-  }
-
-  async function handle(input) {
-    const file = input.files && input.files[0];
+  $('cam').addEventListener('change', async e => {
+    const input = e.target, file = input.files && input.files[0];
     input.value = '';
     if (!file) return;
-    $('ar').textContent = ''; $('det').hidden = true; $('acts').hidden = true;
-    setMsg('أجهّز الصورة…', false, true);
+    setMsg('أقرا النص وأترجمه…');
     try {
-      const blob = await toJpeg(file);
-      setMsg('أقرا النص وأترجمه…', false, true);
-      const tv = $('tv').checked ? 1 : 0;
-      const r = await fetch('/translate?tv=' + tv + '&size=' + size, {
-        method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob
-      });
-      const j = await r.json();
-      if (!j.ok) throw new Error(j.error || 'صار خطأ');
-      overlayOk = !!j.overlay;
-      if (!j.original) { setMsg('ما لقيت نص في الصورة. قرّب الكاميرا من الكلام وخلّها ثابتة.', true); return; }
-      last = j;
-      history.unshift(j);
-      if (history.length > 11) history.pop();
-      setMsg(tv && overlayOk ? 'الترجمة ظاهرة على التلفزيون' : 'الترجمة:', false);
+      const img = await loadImage(file);
+      const j = await send(await cropToBlob(img, img.naturalWidth, img.naturalHeight), false);
+      $('dbg').hidden = true;
+      if (!j.original) { setMsg('ما لقيت كلام في الصورة. قرّب الكاميرا وخلّها ثابتة.', true); return; }
+      setMsg($('tv').checked && overlayOk ? 'الترجمة ظاهرة على التلفزيون' : '');
       showResult(j);
-      renderHistory();
-    } catch (e) {
-      setMsg((e && e.message) ? e.message : 'صار خطأ، جرّب مرة ثانية', true);
+    } catch (err) {
+      setMsg((err && err.message) || 'صار خطأ', true);
+      await showDebug();
     }
-  }
-
-  $('cam').addEventListener('change', e => handle(e.target));
-  $('pick').addEventListener('change', e => handle(e.target));
+  });
 
   $('hide').addEventListener('click', () => { fetch('/hide', { method: 'POST' }).catch(() => {}); });
-  $('again').addEventListener('click', async () => {
-    if (!last) return;
-    // Re-send the text only: ask the TV to show the last translation again.
-    try {
-      await fetch('/show?size=' + size, { method: 'POST', headers: { 'Content-Type': 'text/plain; charset=utf-8' }, body: last.translated });
-    } catch (e) {}
-  });
 }
 </script>
 </body>
