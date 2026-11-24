@@ -14,6 +14,9 @@ android {
         targetSdk 35
         versionCode runNumber
         versionName "1.0.${runNumber}"
+        ndk {
+            abiFilters 'armeabi-v7a', 'arm64-v8a'
+        }
     }
 
     signingConfigs {
