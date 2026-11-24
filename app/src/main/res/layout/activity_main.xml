@@ -27,7 +27,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:text="١. امسح الباركود بكاميرا الآيفون (لازم الجوال والتلفزيون على نفس الواي فاي)\n٢. افتح الرابط في سفاري\n٣. صوّر شاشة اللعبة من الصفحة، والترجمة تطلع هنا فوق الشاشة وفي الجوال"
+            android:text="١. امسح الباركود بكاميرا الآيفون (نفس الواي فاي)\n٢. إذا طلع تحذير &quot;الاتصال غير خاص&quot;: إظهار التفاصيل ← زيارة هذا الموقع\n٣. اضغط &quot;ابدأ الترجمة التلقائية&quot; وثبّت الجوال موجّه على الشاشة\n   والترجمة تتحدّث هنا فوق اللعبة لحالها"
             android:textColor="#C9D1D9"
             android:textSize="18sp"
             android:lineSpacingMultiplier="1.3" />
