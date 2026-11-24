@@ -155,7 +155,6 @@ input[type=checkbox]{width:24px;height:24px;accent-color:var(--accent)}
   checkConn();
   setInterval(checkConn, 15000);
   if (!liveCapable) { $('live').hidden = true; }
-  getWorker().catch(() => {});
 
   function showResult(j) {
     $('ar').textContent = j.translated || '';
@@ -329,6 +328,9 @@ input[type=checkbox]{width:24px;height:24px;accent-color:var(--accent)}
   });
 
   $('hide').addEventListener('click', () => { fetch('/hide', { method: 'POST' }).catch(() => {}); });
+
+  // Start loading the text reader early so the first frame is fast (after everything above is defined).
+  getWorker().catch(() => {});
 }
 </script>
 </body>
