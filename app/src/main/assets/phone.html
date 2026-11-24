@@ -91,6 +91,7 @@ input[type=checkbox]{width:24px;height:24px;accent-color:var(--accent)}
     <div class="seg" data-k="every"><button data-v="2">٢</button><button data-v="3">٣</button><button data-v="5">٥</button></div></div>
 </section>
 
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 <script>
 {
   const $ = id => document.getElementById(id);
@@ -154,6 +155,7 @@ input[type=checkbox]{width:24px;height:24px;accent-color:var(--accent)}
   checkConn();
   setInterval(checkConn, 15000);
   if (!liveCapable) { $('live').hidden = true; }
+  getWorker().catch(() => {});
 
   function showResult(j) {
     $('ar').textContent = j.translated || '';
@@ -161,25 +163,70 @@ input[type=checkbox]{width:24px;height:24px;accent-color:var(--accent)}
     $('det').hidden = !j.original;
   }
 
-  async function send(blob, live) {
-    const q = 'tv=' + ($('tv').checked ? 1 : 0) + '&size=' + opt.size + '&pos=' + opt.pos + (live ? '&live=1' : '');
-    const r = await fetch('/translate?' + q, { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob });
-    let j;
-    try { j = await r.json(); } catch (e) { throw new Error('رد غريب من التلفزيون (' + r.status + ')'); }
-    if (!j.ok) throw new Error(j.error || 'صار خطأ');
-    overlayOk = !!j.overlay;
-    return j;
+  /* ---------- text reading on the iPhone (the TV is too weak for it) ---------- */
+  let workerP = null;
+  function getWorker() {
+    if (!window.Tesseract) return Promise.reject(new Error('ما قدرت أحمّل قارئ النص. تأكد إن الجوال متصل بالإنترنت وحدّث الصفحة.'));
+    if (!workerP) {
+      workerP = Tesseract.createWorker('eng', 1).then(async w => {
+        try { await w.setParameters({ preserve_interword_spaces: '1' }); } catch (e) {}
+        return w;
+      });
+      workerP.catch(() => { workerP = null; });
+    }
+    return workerP;
   }
 
-  function cropToBlob(source, sw, sh) {
+  // Crop to the chosen area, scale, grey-scale, and flip light-on-dark game text to dark-on-light.
+  function prep(source, sw, sh) {
     let sy = 0, h = sh;
     if (opt.area === 'bottom') { sy = Math.round(sh / 2); h = sh - sy; }
     if (opt.area === 'top') { h = Math.round(sh / 2); }
     const k = Math.min(1, 1600 / sw);
     const c = document.createElement('canvas');
     c.width = Math.round(sw * k); c.height = Math.round(h * k);
-    c.getContext('2d').drawImage(source, 0, sy, sw, h, 0, 0, c.width, c.height);
-    return new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(new Error('ما قدرت أجهّز الصورة')), 'image/jpeg', 0.85));
+    const g = c.getContext('2d', { willReadFrequently: true });
+    g.drawImage(source, 0, sy, sw, h, 0, 0, c.width, c.height);
+    const img = g.getImageData(0, 0, c.width, c.height), d = img.data;
+    let sum = 0;
+    for (let i = 0; i < d.length; i += 4) { const y = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000; d[i] = y; sum += y; }
+    const invert = sum / (d.length / 4) < 128;
+    for (let i = 0; i < d.length; i += 4) { const y = invert ? 255 - d[i] : d[i]; d[i] = d[i + 1] = d[i + 2] = y; }
+    g.putImageData(img, 0, 0);
+    return c;
+  }
+
+  function cleanLine(t) { return (t || '').replace(/\s+/g, ' ').trim(); }
+  function goodLine(t, conf) {
+    const letters = (t.match(/[A-Za-zÀ-ÿ]/g) || []).length;
+    return conf >= 55 && letters >= 3 && letters / Math.max(1, t.replace(/\s/g, '').length) > 0.6;
+  }
+
+  async function readText(canvas) {
+    const w = await getWorker();
+    const { data } = await w.recognize(canvas, {}, { text: true, blocks: true });
+    const paras = [];
+    if (data.blocks && data.blocks.length) {
+      for (const b of data.blocks) for (const p of (b.paragraphs || [])) {
+        const ls = (p.lines || []).map(l => [cleanLine(l.text), l.confidence]).filter(([t, c]) => goodLine(t, c)).map(([t]) => t);
+        if (ls.length) paras.push(ls.join(' '));
+      }
+    } else if (data.lines) {
+      for (const l of data.lines) { const t = cleanLine(l.text); if (goodLine(t, l.confidence)) paras.push(t); }
+    } else if (data.text) {
+      for (const l of data.text.split('\n')) { const t = cleanLine(l); if (goodLine(t, 100)) paras.push(t); }
+    }
+    return paras.join('\n');
+  }
+
+  async function send(text, live) {
+    const q = 'tv=' + ($('tv').checked ? 1 : 0) + '&size=' + opt.size + '&pos=' + opt.pos + (live ? '&live=1' : '');
+    const r = await fetch('/text?' + q, { method: 'POST', headers: { 'Content-Type': 'text/plain; charset=utf-8' }, body: text });
+    let j;
+    try { j = await r.json(); } catch (e) { throw new Error('رد غريب من التلفزيون (' + r.status + ')'); }
+    if (!j.ok) throw new Error(j.error || 'صار خطأ');
+    overlayOk = !!j.overlay;
+    return j;
   }
 
   /* ---------- live camera mode ---------- */
@@ -197,11 +244,14 @@ input[type=checkbox]{width:24px;height:24px;accent-color:var(--accent)}
       const v = $('video');
       if (v.videoWidth > 0) {
         try {
-          setState('يقرأ الشاشة…', true);
-          const j = await send(await cropToBlob(v, v.videoWidth, v.videoHeight), true);
+          setState(workerP ? 'يقرأ الشاشة…' : 'أحمّل قارئ النص أول مرة…', true);
+          const text = await readText(prep(v, v.videoWidth, v.videoHeight));
+          if (!running) break;
+          if (!text) { setState('ما فيه كلام على الشاشة الحين', true); setMsg(''); await sleep(Math.max(300, Number(opt.every) * 1000 - (Date.now() - t0))); continue; }
+          setState('يترجم…', true);
+          const j = await send(text, true);
           $('dbg').hidden = true;
-          if (!j.original) setState('ما فيه كلام على الشاشة الحين', true);
-          else {
+          {
             if (j.translated !== lastShown) { showResult(j); lastShown = j.translated; }
             setState(j.same ? 'نفس الكلام، الترجمة ظاهرة' : 'ترجمة جديدة ✓', true);
           }
@@ -265,7 +315,9 @@ input[type=checkbox]{width:24px;height:24px;accent-color:var(--accent)}
     setMsg('أقرا النص وأترجمه…');
     try {
       const img = await loadImage(file);
-      const j = await send(await cropToBlob(img, img.naturalWidth, img.naturalHeight), false);
+      const text = await readText(prep(img, img.naturalWidth, img.naturalHeight));
+      if (!text) { setMsg('ما لقيت كلام في الصورة. قرّب الكاميرا وخلّها ثابتة.', true); return; }
+      const j = await send(text, false);
       $('dbg').hidden = true;
       if (!j.original) { setMsg('ما لقيت كلام في الصورة. قرّب الكاميرا وخلّها ثابتة.', true); return; }
       setMsg($('tv').checked && overlayOk ? 'الترجمة ظاهرة على التلفزيون' : '');
